@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BIBLE_BOOKS } from './data/bibleData';
 import { Mood, VerseRecord } from './types';
-import { GoogleGenAI } from "@google/genai";
 
 // Constants
 const TOTAL_CHAPTERS = 1189;
@@ -48,32 +47,42 @@ function App() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(readChapters));
   }, [readChapters]);
 
-  const fetchScripture = async (book: string, chapter: number, onlyOneVerse: boolean = false) => {
-    setIsLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = onlyOneVerse 
-        ? `Pick one inspiring and impactful verse from ${book} Chapter ${chapter} (KJV). Return only the verse text and its verse number.` 
-        : `Provide the full King James Version (KJV) text for ${book} Chapter ${chapter}. Format it clearly with verse numbers. Include only the biblical text.`;
-      
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-      });
+ const fetchScripture = async (
+  book: string,
+  chapter: number,
+  onlyOneVerse: boolean = false
+) => {
+  setIsLoading(true);
+  try {
+    const response = await fetch(
+      `https://bible-api.com/${encodeURIComponent(book)}%20${chapter}?translation=kjv`
+    );
 
-      setCurrentContent({
-        book,
-        chapter,
-        text: response.text || "Scripture unavailable.",
-        verse: onlyOneVerse ? "Selection" : undefined
-      });
-      setView('read');
-    } catch (error) {
-      alert("Error connecting to the jar. Please check your connection.");
-    } finally {
-      setIsLoading(false);
+    const data = await response.json();
+
+    if (!data.verses) {
+      throw new Error("No verses found");
     }
-  };
+
+    const text = onlyOneVerse
+      ? data.verses[Math.floor(Math.random() * data.verses.length)].text
+      : data.verses.map((v: any) => `${v.verse}. ${v.text}`).join("\n");
+
+    setCurrentContent({
+      book,
+      chapter,
+      text,
+      verse: onlyOneVerse ? "Selection" : undefined,
+    });
+
+    setView("read");
+  } catch (err) {
+    alert("Scripture not available.");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const pickFromJar = () => {
     const unread: { book: string, chapter: number }[] = [];
